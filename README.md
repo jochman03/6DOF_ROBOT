@@ -97,8 +97,8 @@ STM32 implementation includes:
 
 ## Assets
 
+### Trajectory test (gif)
 ![Trajectory test](simulations/ik_test_1.gif)
 
-[![IK test video](https://img.youtube.com/vi/HjVu3E5pCug/0.jpg)](https://www.youtube.com/shorts/HjVu3E5pCug)
-
+### Youtube videos
 https://www.youtube.com/playlist?list=PLLbGYqHAyf1fbl_TrEpRQ8hpMJwUmI0mh
