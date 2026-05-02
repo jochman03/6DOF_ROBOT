@@ -2,9 +2,8 @@
  * oled.h
  *
  *  Created on: Dec 11, 2025
- *      Author: Jakub Ochman
+ *      Author: jochman03
  */
-
 
 #ifndef OLED_H
 #define OLED_H

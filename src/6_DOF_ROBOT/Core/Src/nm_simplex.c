@@ -1,320 +1,454 @@
-/*
- * nm_simplex.c
- *
- *  Created on: 11 gru 2025
- *      Author: jakub
- */
-
-
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
-#include <stdint.h>
 #include "nm_simplex.h"
+#include "inttypes.h"
 
-#define SWAP(a, b) {swap=(a);(a)=(b);(b)=swap;}
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#define N 4
+#define FP_SHIFT 8
 
-#define RAD2DEG (180.0f / M_PI)
-#define DEG2RAD (M_PI / 180.0f)
+#define SERVO_MID 512
+#define LUT_MASK 1023
+#define LUT_COS_OFFSET 256
 
-static inline float clampf(float x, float lo, float hi){
-    if (x < lo) {
-    	return lo;
-    }
-    if (x > hi) {
-    	return hi;
-    }
-    return x;
+static inline int16_t servo_to_lut_angle(int16_t pos) {
+	return (int16_t) (((int32_t) pos - SERVO_MID) / 2);
 }
 
-static inline void clamp_vec(float* x, float* lo, float* hi){
-    for (int i = 0; i < N; i++) {
-        x[i] = clampf(x[i], lo[i], hi[i]);
-    }
+int16_t sin_table[1024] = { 0, 201, 402, 603, 804, 1005, 1206, 1407, 1608, 1809,
+		2009, 2210, 2410, 2611, 2811, 3012, 3212, 3412, 3612, 3811, 4011, 4210,
+		4410, 4609, 4808, 5007, 5205, 5404, 5602, 5800, 5998, 6195, 6393, 6590,
+		6786, 6983, 7179, 7375, 7571, 7767, 7962, 8157, 8351, 8545, 8739, 8933,
+		9126, 9319, 9512, 9704, 9896, 10087, 10278, 10469, 10659, 10849, 11039,
+		11228, 11417, 11605, 11793, 11980, 12167, 12353, 12539, 12725, 12910,
+		13094, 13279, 13462, 13645, 13828, 14010, 14191, 14372, 14553, 14732,
+		14912, 15090, 15269, 15446, 15623, 15800, 15976, 16151, 16325, 16499,
+		16673, 16846, 17018, 17189, 17360, 17530, 17700, 17869, 18037, 18204,
+		18371, 18537, 18703, 18868, 19032, 19195, 19357, 19519, 19680, 19841,
+		20000, 20159, 20317, 20475, 20631, 20787, 20942, 21096, 21250, 21403,
+		21554, 21705, 21856, 22005, 22154, 22301, 22448, 22594, 22739, 22884,
+		23027, 23170, 23311, 23452, 23592, 23731, 23870, 24007, 24143, 24279,
+		24413, 24547, 24680, 24811, 24942, 25072, 25201, 25329, 25456, 25582,
+		25708, 25832, 25955, 26077, 26198, 26319, 26438, 26556, 26674, 26790,
+		26905, 27019, 27133, 27245, 27356, 27466, 27575, 27683, 27790, 27896,
+		28001, 28105, 28208, 28310, 28411, 28510, 28609, 28706, 28803, 28898,
+		28992, 29085, 29177, 29268, 29358, 29447, 29534, 29621, 29706, 29791,
+		29874, 29956, 30037, 30117, 30195, 30273, 30349, 30424, 30498, 30571,
+		30643, 30714, 30783, 30852, 30919, 30985, 31050, 31113, 31176, 31237,
+		31297, 31356, 31414, 31470, 31526, 31580, 31633, 31685, 31736, 31785,
+		31833, 31880, 31926, 31971, 32014, 32057, 32098, 32137, 32176, 32213,
+		32250, 32285, 32318, 32351, 32382, 32412, 32441, 32469, 32495, 32521,
+		32545, 32567, 32589, 32609, 32628, 32646, 32663, 32678, 32692, 32705,
+		32717, 32728, 32737, 32745, 32752, 32757, 32761, 32765, 32766, 32767,
+		32766, 32765, 32761, 32757, 32752, 32745, 32737, 32728, 32717, 32705,
+		32692, 32678, 32663, 32646, 32628, 32609, 32589, 32567, 32545, 32521,
+		32495, 32469, 32441, 32412, 32382, 32351, 32318, 32285, 32250, 32213,
+		32176, 32137, 32098, 32057, 32014, 31971, 31926, 31880, 31833, 31785,
+		31736, 31685, 31633, 31580, 31526, 31470, 31414, 31356, 31297, 31237,
+		31176, 31113, 31050, 30985, 30919, 30852, 30783, 30714, 30643, 30571,
+		30498, 30424, 30349, 30273, 30195, 30117, 30037, 29956, 29874, 29791,
+		29706, 29621, 29534, 29447, 29358, 29268, 29177, 29085, 28992, 28898,
+		28803, 28706, 28609, 28510, 28411, 28310, 28208, 28105, 28001, 27896,
+		27790, 27683, 27575, 27466, 27356, 27245, 27133, 27019, 26905, 26790,
+		26674, 26556, 26438, 26319, 26198, 26077, 25955, 25832, 25708, 25582,
+		25456, 25329, 25201, 25072, 24942, 24811, 24680, 24547, 24413, 24279,
+		24143, 24007, 23870, 23731, 23592, 23452, 23311, 23170, 23027, 22884,
+		22739, 22594, 22448, 22301, 22154, 22005, 21856, 21705, 21554, 21403,
+		21250, 21096, 20942, 20787, 20631, 20475, 20317, 20159, 20000, 19841,
+		19680, 19519, 19357, 19195, 19032, 18868, 18703, 18537, 18371, 18204,
+		18037, 17869, 17700, 17530, 17360, 17189, 17018, 16846, 16673, 16499,
+		16325, 16151, 15976, 15800, 15623, 15446, 15269, 15090, 14912, 14732,
+		14553, 14372, 14191, 14010, 13828, 13645, 13462, 13279, 13094, 12910,
+		12725, 12539, 12353, 12167, 11980, 11793, 11605, 11417, 11228, 11039,
+		10849, 10659, 10469, 10278, 10087, 9896, 9704, 9512, 9319, 9126, 8933,
+		8739, 8545, 8351, 8157, 7962, 7767, 7571, 7375, 7179, 6983, 6786, 6590,
+		6393, 6195, 5998, 5800, 5602, 5404, 5205, 5007, 4808, 4609, 4410, 4210,
+		4011, 3811, 3612, 3412, 3212, 3012, 2811, 2611, 2410, 2210, 2009, 1809,
+		1608, 1407, 1206, 1005, 804, 603, 402, 201, 0, -201, -402, -603, -804,
+		-1005, -1206, -1407, -1608, -1809, -2009, -2210, -2410, -2611, -2811,
+		-3012, -3212, -3412, -3612, -3811, -4011, -4210, -4410, -4609, -4808,
+		-5007, -5205, -5404, -5602, -5800, -5998, -6195, -6393, -6590, -6786,
+		-6983, -7179, -7375, -7571, -7767, -7962, -8157, -8351, -8545, -8739,
+		-8933, -9126, -9319, -9512, -9704, -9896, -10087, -10278, -10469,
+		-10659, -10849, -11039, -11228, -11417, -11605, -11793, -11980, -12167,
+		-12353, -12539, -12725, -12910, -13094, -13279, -13462, -13645, -13828,
+		-14010, -14191, -14372, -14553, -14732, -14912, -15090, -15269, -15446,
+		-15623, -15800, -15976, -16151, -16325, -16499, -16673, -16846, -17018,
+		-17189, -17360, -17530, -17700, -17869, -18037, -18204, -18371, -18537,
+		-18703, -18868, -19032, -19195, -19357, -19519, -19680, -19841, -20000,
+		-20159, -20317, -20475, -20631, -20787, -20942, -21096, -21250, -21403,
+		-21554, -21705, -21856, -22005, -22154, -22301, -22448, -22594, -22739,
+		-22884, -23027, -23170, -23311, -23452, -23592, -23731, -23870, -24007,
+		-24143, -24279, -24413, -24547, -24680, -24811, -24942, -25072, -25201,
+		-25329, -25456, -25582, -25708, -25832, -25955, -26077, -26198, -26319,
+		-26438, -26556, -26674, -26790, -26905, -27019, -27133, -27245, -27356,
+		-27466, -27575, -27683, -27790, -27896, -28001, -28105, -28208, -28310,
+		-28411, -28510, -28609, -28706, -28803, -28898, -28992, -29085, -29177,
+		-29268, -29358, -29447, -29534, -29621, -29706, -29791, -29874, -29956,
+		-30037, -30117, -30195, -30273, -30349, -30424, -30498, -30571, -30643,
+		-30714, -30783, -30852, -30919, -30985, -31050, -31113, -31176, -31237,
+		-31297, -31356, -31414, -31470, -31526, -31580, -31633, -31685, -31736,
+		-31785, -31833, -31880, -31926, -31971, -32014, -32057, -32098, -32137,
+		-32176, -32213, -32250, -32285, -32318, -32351, -32382, -32412, -32441,
+		-32469, -32495, -32521, -32545, -32567, -32589, -32609, -32628, -32646,
+		-32663, -32678, -32692, -32705, -32717, -32728, -32737, -32745, -32752,
+		-32757, -32761, -32765, -32766, -32767, -32766, -32765, -32761, -32757,
+		-32752, -32745, -32737, -32728, -32717, -32705, -32692, -32678, -32663,
+		-32646, -32628, -32609, -32589, -32567, -32545, -32521, -32495, -32469,
+		-32441, -32412, -32382, -32351, -32318, -32285, -32250, -32213, -32176,
+		-32137, -32098, -32057, -32014, -31971, -31926, -31880, -31833, -31785,
+		-31736, -31685, -31633, -31580, -31526, -31470, -31414, -31356, -31297,
+		-31237, -31176, -31113, -31050, -30985, -30919, -30852, -30783, -30714,
+		-30643, -30571, -30498, -30424, -30349, -30273, -30195, -30117, -30037,
+		-29956, -29874, -29791, -29706, -29621, -29534, -29447, -29358, -29268,
+		-29177, -29085, -28992, -28898, -28803, -28706, -28609, -28510, -28411,
+		-28310, -28208, -28105, -28001, -27896, -27790, -27683, -27575, -27466,
+		-27356, -27245, -27133, -27019, -26905, -26790, -26674, -26556, -26438,
+		-26319, -26198, -26077, -25955, -25832, -25708, -25582, -25456, -25329,
+		-25201, -25072, -24942, -24811, -24680, -24547, -24413, -24279, -24143,
+		-24007, -23870, -23731, -23592, -23452, -23311, -23170, -23027, -22884,
+		-22739, -22594, -22448, -22301, -22154, -22005, -21856, -21705, -21554,
+		-21403, -21250, -21096, -20942, -20787, -20631, -20475, -20317, -20159,
+		-20000, -19841, -19680, -19519, -19357, -19195, -19032, -18868, -18703,
+		-18537, -18371, -18204, -18037, -17869, -17700, -17530, -17360, -17189,
+		-17018, -16846, -16673, -16499, -16325, -16151, -15976, -15800, -15623,
+		-15446, -15269, -15090, -14912, -14732, -14553, -14372, -14191, -14010,
+		-13828, -13645, -13462, -13279, -13094, -12910, -12725, -12539, -12353,
+		-12167, -11980, -11793, -11605, -11417, -11228, -11039, -10849, -10659,
+		-10469, -10278, -10087, -9896, -9704, -9512, -9319, -9126, -8933, -8739,
+		-8545, -8351, -8157, -7962, -7767, -7571, -7375, -7179, -6983, -6786,
+		-6590, -6393, -6195, -5998, -5800, -5602, -5404, -5205, -5007, -4808,
+		-4609, -4410, -4210, -4011, -3811, -3612, -3412, -3212, -3012, -2811,
+		-2611, -2410, -2210, -2009, -1809, -1608, -1407, -1206, -1005, -804,
+		-603, -402, -201
+
+};
+
+void calculate_position(int16_t* ang, int16_t* pos) {
+	pos[0] = (int16_t) (((int32_t) sin_table[(ang[0] + ang[1] + ang[2]) & 1023]
+			* -70
+			- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2] + ang[3]) & 1023]
+					* 25 + (int32_t) sin_table[(ang[0] - ang[1]) & 1023] * 55
+			- (int32_t) sin_table[(ang[0] + ang[1] + ang[2] + ang[3]) & 1023]
+					* 25 - (int32_t) sin_table[(ang[0] + ang[1]) & 1023] * 55
+			- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2]) & 1023] * 70)
+			>> 15);
+
+	pos[1] =
+			(int16_t) (((int32_t) sin_table[(ang[0] + ang[1] + ang[2] + 256)
+					& 1023] * 70
+					- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2] + ang[3]
+							+ 256) & 1023] * 25
+					- (int32_t) sin_table[(ang[0] - ang[1] + 256) & 1023] * 55
+					+ (int32_t) sin_table[(ang[0] + ang[1] + ang[2] + ang[3]
+							+ 256) & 1023] * 25
+					+ (int32_t) sin_table[(ang[0] + ang[1] + 256) & 1023] * 55
+					- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2] + 256)
+							& 1023] * 70) >> 15);
+
+	pos[2] = (int16_t) (((int32_t) sin_table[(ang[1] + ang[2] + ang[3] + 256)
+			& 1023] * 50
+			+ (int32_t) sin_table[(ang[1] + ang[2] + 256) & 1023] * 140
+			+ (int32_t) sin_table[(ang[1] + 256) & 1023] * 110) >> 15) + 120;
 }
 
-void simplex(float (*fun)(float*, float*, float*), float* phi0, int maxIter, float* f_min, float* x_min, float* pos, float* phi_min, float* phi_max){
-    float simplex[N+1][N];
-    float step = 0.05f;
-    float fvals[N+1];
+void calculate_position_from_servo(int16_t* phi, int16_t* pos) {
+	int16_t ang[4];
 
-    float alpha = 1.0f;
-    float gamma = 2.0f;
-    float rho   = 0.5f;
-    float sigma = 0.5f;
+	for (uint8_t i = 0; i < 4; i++) {
+		ang[i] = servo_to_lut_angle(phi[i]);
+	}
 
-
-    for(int i = 0; i < N+1; i++){
-        for(int j = 0; j < N; j++){
-            simplex[i][j] = phi0[j];
-        }
-        if(i > 0){
-            simplex[i][i-1] += step;
-        }
-        clamp_vec(simplex[i], phi_min, phi_max);
-    }
-
-    for(int iter = 0; iter < maxIter; iter++){
-
-        for (int k = 0; k < N+1; k++){
-            fvals[k] = fun(simplex[k], pos, phi0);
-        }
-
-        float swap;
-        for(int j = 0; j < N+1; j++){
-            for(int k = j+1; k < N+1; k++){
-                if(fvals[j] > fvals[k]){
-                    SWAP(fvals[j], fvals[k]);
-                    for(int l = 0; l < N; l++){
-                        SWAP(simplex[j][l], simplex[k][l]);
-                    }
-                }
-            }
-        }
-
-
-        float centroid[N] = {0};
-        for(int k = 0; k < N; k++){
-            centroid[k] = 0.0;
-            for(int l = 0; l < N; l++){
-                centroid[k] += simplex[l][k];
-            }
-            centroid[k] /= N;
-        }
-
-        float x_ref[N];
-        for(int k = 0; k < N; k++){
-            x_ref[k] = centroid[k] + alpha * (centroid[k] - simplex[N][k]);
-        }
-        clamp_vec(x_ref, phi_min, phi_max);
-        float f_ref = fun(x_ref, pos, phi0);
-
-        if(f_ref < fvals[0]) {
-
-            float x_exp[N];
-            for(int k = 0; k < N; k++){
-                x_exp[k] = centroid[k] + gamma * (x_ref[k] - centroid[k]);
-            }
-            clamp_vec(x_exp, phi_min, phi_max);
-            float f_exp = fun(x_exp, pos, phi0);
-
-            if(f_exp < f_ref){
-                for(int k = 0; k < N; k++){
-                    simplex[N][k] = x_exp[k];
-                }
-                fvals[N] = f_exp;
-            }
-            else{
-                for(int k = 0; k < N; k++){
-                    simplex[N][k] = x_ref[k];
-                }
-                fvals[N] = f_ref;
-            }
-            continue;
-        }
-
-        if(f_ref < fvals[N-1]) {
-            for(int k = 0; k < N; k++){
-                simplex[N][k] = x_ref[k];
-            }
-            fvals[N] = f_ref;
-            continue;
-        }
-
-        float x_con[N];
-        float f_con;
-
-        if(f_ref < fvals[N]) {
-            for(int k = 0; k < N; k++){
-                x_con[k] = centroid[k] + rho * (x_ref[k] - centroid[k]);
-            }
-            clamp_vec(x_con, phi_min, phi_max);
-            f_con = fun(x_con, pos, phi0);
-        }
-        else {
-            for(int k = 0; k < N; k++){
-                x_con[k] = centroid[k] - rho * (centroid[k] - simplex[N][k]);
-            }
-            clamp_vec(x_con, phi_min, phi_max);
-            f_con = fun(x_con, pos, phi0);
-        }
-
-        if(f_con < fvals[N]) {
-            for(int k = 0; k < N; k++){
-                simplex[N][k] = x_con[k];
-            }
-            fvals[N] = f_con;
-            continue;
-        }
-
-        for(int i = 1; i < N+1; i++){
-            for(int k = 0; k < N; k++){
-                simplex[i][k] = simplex[0][k] + sigma * (simplex[i][k] - simplex[0][k]);
-            }
-            clamp_vec(simplex[i], phi_min, phi_max);
-        }
-
-    }
-
-
-    for (int k = 0; k < N+1; k++){
-        fvals[k] = fun(simplex[k], pos, phi0);
-    }
-
-    float swap;
-    for(int j = 0; j < N+1; j++){
-        for(int k = j+1; k < N+1; k++){
-            if(fvals[j] > fvals[k]){
-                SWAP(fvals[j], fvals[k]);
-                for(int l = 0; l < N; l++){
-                    SWAP(simplex[j][l], simplex[k][l]);
-                }
-            }
-        }
-    }
-
-    *f_min = fvals[0];
-    for(int i = 0; i < N; i++){
-        x_min[i] = simplex[0][i];
-    }
+	calculate_position(ang, pos);
 }
 
-float pos_f(float* phi, float* pos , float* phi0){
-    float x_pos =
-        -70.0f * sinf(phi[0] + phi[1] + phi[2])
-        -25.0f * sinf(-phi[0] + phi[1] + phi[2] + phi[3])
-        +55.0f * sinf(phi[0] - phi[1])
-        -25.0f * sinf(phi[0] + phi[1] + phi[2] + phi[3])
-        -55.0f * sinf(phi[0] + phi[1])
-        -70.0f * sinf(-phi[0] + phi[1] + phi[2]);
+int32_t calculate_position_penalty(int16_t* ang, int16_t* target_pos) {
+	int16_t x_pos =
+			(int16_t) (((int32_t) sin_table[(ang[0] + ang[1] + ang[2])
+					& LUT_MASK] * -70
+					- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2] + ang[3])
+							& LUT_MASK] * 25
+					+ (int32_t) sin_table[(ang[0] - ang[1]) & LUT_MASK] * 55
+					- (int32_t) sin_table[(ang[0] + ang[1] + ang[2] + ang[3])
+							& LUT_MASK] * 25
+					- (int32_t) sin_table[(ang[0] + ang[1]) & LUT_MASK] * 55
+					- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2]) & LUT_MASK]
+							* 70) >> 15);
 
-    float y_pos =
-        +70.0f * cosf(phi[0] + phi[1] + phi[2])
-        -25.0f * cosf(-phi[0] + phi[1] + phi[2] + phi[3])
-        -55.0f * cosf(phi[0] - phi[1])
-        +25.0f * cosf(phi[0] + phi[1] + phi[2] + phi[3])
-        +55.0f * cosf(phi[0] + phi[1])
-        -70.0f * cosf(-phi[0] + phi[1] + phi[2]);
+	int16_t y_pos = (int16_t) (((int32_t) sin_table[(ang[0] + ang[1] + ang[2]
+			+ 256) & LUT_MASK] * 70
+			- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2] + ang[3] + 256)
+					& LUT_MASK] * 25
+			- (int32_t) sin_table[(ang[0] - ang[1] + 256) & LUT_MASK] * 55
+			+ (int32_t) sin_table[(ang[0] + ang[1] + ang[2] + ang[3] + 256)
+					& LUT_MASK] * 25
+			+ (int32_t) sin_table[(ang[0] + ang[1] + 256) & LUT_MASK] * 55
+			- (int32_t) sin_table[(-ang[0] + ang[1] + ang[2] + 256) & LUT_MASK]
+					* 70) >> 15);
 
-    float z_pos =
-        +50.0f * cosf(phi[1] + phi[2] + phi[3])
-        +140.0f * cosf(phi[1] + phi[2])
-        +110.0f * cosf(phi[1])
-        +120.0f;
+	int16_t z_pos = (int16_t) (((int32_t) sin_table[(ang[1] + ang[2] + ang[3]
+			+ 256) & LUT_MASK] * 50
+			+ (int32_t) sin_table[(ang[1] + ang[2] + 256) & LUT_MASK] * 140
+			+ (int32_t) sin_table[(ang[1] + 256) & LUT_MASK] * 110) >> 15)
+			+ 120;
 
-    float dx = pos[0] - x_pos;
-    float dy = pos[1] - y_pos;
-    float dz = pos[2] - z_pos;
+	int16_t x_dif = target_pos[0] - x_pos;
+	int16_t y_dif = target_pos[1] - y_pos;
+	int16_t z_dif = target_pos[2] - z_pos;
 
-    float ang_pun = 0;
-    float ang_cost = 100;
-    for(uint8_t i = 0; i < N; i++){
-    	float t = phi[i] - phi0[i];
-    	ang_pun += ang_cost * t * t;
-    }
-
-
-    return dx*dx + dy*dy + dz*dz + ang_pun;
+	return (int32_t) x_dif * x_dif + (int32_t) y_dif * y_dif
+			+ (int32_t) z_dif * z_dif;
 }
 
-void pos_c(float* phi, float* v){
-    v[0] =
-        -70.0f * sinf(phi[0] + phi[1] + phi[2])
-        -25.0f * sinf(-phi[0] + phi[1] + phi[2] + phi[3])
-        +55.0f * sinf(phi[0] - phi[1])
-        -25.0f * sinf(phi[0] + phi[1] + phi[2] + phi[3])
-        -55.0f * sinf(phi[0] + phi[1])
-        -70.0f * sinf(-phi[0] + phi[1] + phi[2]);
+int32_t calculate_boundaries_penalty(int16_t* phi, int16_t* phi_min,
+		int16_t* phi_max) {
+	int32_t value = 0;
+	int32_t penalty = 1000;
 
-    v[1] =
-        +70.0f * cosf(phi[0] + phi[1] + phi[2])
-        -25.0f * cosf(-phi[0] + phi[1] + phi[2] + phi[3])
-        -55.0f * cosf(phi[0] - phi[1])
-        +25.0f * cosf(phi[0] + phi[1] + phi[2] + phi[3])
-        +55.0f * cosf(phi[0] + phi[1])
-        -70.0f * cosf(-phi[0] + phi[1] + phi[2]);
+	for (int i = 0; i < 4; i++) {
+		int16_t low_bound = MAX(0, phi_min[i] - phi[i]);
+		int16_t upp_bound = MAX(0, phi[i] - phi_max[i]);
+		value += (int32_t) low_bound * low_bound
+				+ (int32_t) upp_bound * upp_bound;
+	}
 
-    v[2] =
-        +50.0f * cosf(phi[1] + phi[2] + phi[3])
-        +140.0f * cosf(phi[1] + phi[2])
-        +110.0f * cosf(phi[1])
-        +120.0f;
+	return penalty * value;
 }
 
-void deg_2_rad(float* phi_deg, int size){
-    for(uint8_t i = 0; i < size; i++){
-        phi_deg[i] = phi_deg[i] * DEG2RAD;
-    }
-}
-void rad_2_deg(float* phi_rad, int size){
-    for(uint8_t i = 0; i < size; i++){
-        phi_rad[i] = phi_rad[i] * RAD2DEG;
-    }
-}
-void rad_2_pulse(float* phi_rad, uint16_t* phi_pulse, int size){
-    const float scale = 1000.0f / M_PI;
+int32_t calculate_continuity_penalty(int16_t* phi, int16_t* previous_phi) {
+	if (previous_phi == NULL) {
+		return 0;
+	}
 
-    for(uint8_t i = 0; i < size; i++){
-        float phi = phi_rad[i];
+	int32_t value = 0;
+	int32_t div = 4;
 
-        if(phi < -M_PI_2){
-            phi = -M_PI_2;
-        }
-        if(phi >  M_PI_2){
-            phi =  M_PI_2;
-        }
+	for (uint8_t i = 0; i < 4; i++) {
+		int16_t diff = phi[i] - previous_phi[i];
+		value += (int32_t) diff * diff;
+	}
 
-        float pulse_f = (phi + M_PI_2) * scale;
-
-        if(pulse_f < 0.0f){
-            pulse_f = 0.0f;
-        }
-        if(pulse_f > 1000.0f){
-            pulse_f = 1000.0f;
-        }
-
-        phi_pulse[i] = (uint16_t)(pulse_f + 0.5f);
-    }
-}
-void pulse_2_rad(float* phi_rad, uint16_t* phi_pulse, int size){
-    const float scale = M_PI / 1000.0f;
-
-    for(uint8_t i = 0; i < size; i++){
-        uint16_t p = phi_pulse[i];
-
-        if(p > 1000){
-            p = 1000;
-        }
-
-        phi_rad[i] = p * scale - M_PI_2;
-    }
+	return value / div;
 }
 
-void deg_2_pulse(float* phi_deg, uint16_t* phi_pulse, int size){
-    const float scale = 1000.0f / 180.0f;
+int32_t calculate_function_cost(int16_t* phi, int16_t* pos, int16_t* phi_min,
+		int16_t* phi_max, int16_t* previous_phi) {
+	int16_t ang[4];
 
-    for(uint8_t i = 0; i < size; i++){
-        float phi = phi_deg[i];
+	for (uint8_t i = 0; i < 4; i++) {
+		ang[i] = servo_to_lut_angle(phi[i]);
+	}
 
-        if(phi < -90.0f){
-            phi = -90.0f;
-        }
-        if(phi >  90.0f){
-            phi =  90.0f;
-        }
-
-        float p = (phi + 90.0f) * scale;
-
-        if(p < 0.0f){
-            p = 0.0f;
-        }
-        if(p > 1000.0f){
-            p = 1000.0f;
-        }
-
-        phi_pulse[i] = (uint16_t)(p + 0.5f);
-    }
+	return calculate_position_penalty(ang, pos)
+			+ calculate_boundaries_penalty(phi, phi_min, phi_max)
+			+ calculate_continuity_penalty(phi, previous_phi);
 }
 
+void nm_simplex(
+		int32_t (*fun)(int16_t*, int16_t*, int16_t*, int16_t*, int16_t*),
+		int16_t* x0, uint16_t maxIter, int32_t* f_min, int16_t* x_min,
+		int16_t* pos, int16_t* phi_min, int16_t* phi_max) {
+	int32_t simplex[N + 1][N];
+	int32_t fvals[N + 1];
+
+	int32_t step = 51;
+
+	int32_t alpha = 256;
+	int32_t gamma = 512;
+	int32_t rho = 128;
+	int32_t sigma = 128;
+
+	int16_t phi[N];
+
+	/* init simplex */
+	for (uint8_t i = 0; i < N + 1; i++) {
+		for (uint8_t j = 0; j < N; j++) {
+			simplex[i][j] = x0[j];
+		}
+
+		if (i > 0) {
+			simplex[i][i - 1] += step;
+		}
+	}
+
+	for (uint16_t iter = 0; iter < maxIter; iter++) {
+
+		/* evaluate function */
+		for (uint8_t k = 0; k < N + 1; k++) {
+
+			for (uint8_t j = 0; j < N; j++) {
+				phi[j] = (int16_t) simplex[k][j];
+			}
+
+			fvals[k] = fun(phi, pos, phi_min, phi_max, x0);
+		}
+
+		/* sort simplex */
+		for (uint8_t j = 0; j < N + 1; j++) {
+			for (uint8_t k = j + 1; k < N + 1; k++) {
+
+				if (fvals[j] > fvals[k]) {
+
+					SWAP(fvals[j], fvals[k]);
+
+					for (uint8_t l = 0; l < N; l++) {
+						SWAP(simplex[j][l], simplex[k][l]);
+					}
+				}
+			}
+		}
+
+		/* centroid */
+		int32_t centroid[N];
+
+		for (uint8_t k = 0; k < N; k++) {
+
+			centroid[k] = 0;
+
+			for (uint8_t l = 0; l < N; l++) {
+				centroid[k] += simplex[l][k];
+			}
+
+			centroid[k] /= N;
+		}
+
+		/* reflection */
+		int32_t x_ref[N];
+
+		for (uint8_t k = 0; k < N; k++) {
+			x_ref[k] = centroid[k]
+					+ ((alpha * (centroid[k] - simplex[N][k])) >> FP_SHIFT);
+		}
+
+		for (uint8_t j = 0; j < N; j++) {
+			phi[j] = (int16_t) x_ref[j];
+		}
+
+		int32_t f_ref = fun(phi, pos, phi_min, phi_max, x0);
+
+		/* expansion */
+		if (f_ref < fvals[0]) {
+
+			int32_t x_exp[N];
+
+			for (uint8_t k = 0; k < N; k++) {
+				x_exp[k] = centroid[k]
+						+ ((gamma * (x_ref[k] - centroid[k])) >> FP_SHIFT);
+			}
+
+			for (uint8_t j = 0; j < N; j++) {
+				phi[j] = (int16_t) x_exp[j];
+			}
+
+			{
+				int32_t f_exp = fun(phi, pos, phi_min, phi_max, x0);
+
+				if (f_exp < f_ref) {
+
+					for (uint8_t k = 0; k < N; k++) {
+						simplex[N][k] = x_exp[k];
+					}
+
+					fvals[N] = f_exp;
+				} else {
+
+					for (uint8_t k = 0; k < N; k++) {
+						simplex[N][k] = x_ref[k];
+					}
+
+					fvals[N] = f_ref;
+				}
+			}
+
+			continue;
+		}
+
+		/* accept reflection */
+		if (f_ref < fvals[N - 1]) {
+
+			for (uint8_t k = 0; k < N; k++) {
+				simplex[N][k] = x_ref[k];
+			}
+
+			fvals[N] = f_ref;
+			continue;
+		}
+
+		/* contraction */
+		{
+			int32_t x_con[N];
+			int32_t f_con;
+
+			if (f_ref < fvals[N]) {
+
+				for (uint8_t k = 0; k < N; k++) {
+					x_con[k] = centroid[k]
+							+ ((rho * (x_ref[k] - centroid[k])) >> FP_SHIFT);
+				}
+			} else {
+
+				for (uint8_t k = 0; k < N; k++) {
+					x_con[k] =
+							centroid[k]
+									- ((rho * (centroid[k] - simplex[N][k]))
+											>> FP_SHIFT);
+				}
+			}
+
+			for (uint8_t j = 0; j < N; j++) {
+				phi[j] = (int16_t) x_con[j];
+			}
+
+			f_con = fun(phi, pos, phi_min, phi_max, x0);
+
+			if (f_con < fvals[N]) {
+
+				for (uint8_t k = 0; k < N; k++) {
+					simplex[N][k] = x_con[k];
+				}
+
+				fvals[N] = f_con;
+				continue;
+			}
+		}
+
+		/* reduction */
+		for (uint8_t i = 1; i < N + 1; i++) {
+			for (uint8_t k = 0; k < N; k++) {
+
+				simplex[i][k] =
+						simplex[0][k]
+								+ ((sigma * (simplex[i][k] - simplex[0][k]))
+										>> FP_SHIFT);
+			}
+		}
+	}
+
+	/* final evaluation */
+	for (uint8_t k = 0; k < N + 1; k++) {
+
+		for (uint8_t j = 0; j < N; j++) {
+			phi[j] = (int16_t) simplex[k][j];
+		}
+
+		fvals[k] = fun(phi, pos, phi_min, phi_max, x0);
+	}
+
+	/* final sort */
+	for (uint8_t j = 0; j < N + 1; j++) {
+		for (uint8_t k = j + 1; k < N + 1; k++) {
+
+			if (fvals[j] > fvals[k]) {
+				SWAP(fvals[j], fvals[k]);
+
+				for (uint8_t l = 0; l < N; l++) {
+					SWAP(simplex[j][l], simplex[k][l]);
+				}
+			}
+		}
+	}
+
+	*f_min = fvals[0];
+
+	for (uint8_t i = 0; i < N; i++) {
+		x_min[i] = (int16_t) simplex[0][i];
+	}
+}

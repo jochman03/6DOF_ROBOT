@@ -2,6 +2,8 @@
 
 This repository contains the firmware and simulation files for a 6-degree-of-freedom (DOF) robot, currently implemented with 4 active DOFs. The project includes live inverse kinematics computation on an STM32 microcontroller, allowing real-time control via UART or a joystick.
 
+The latest version improves the inverse kinematics calculations by replacing the previous floating-point model with fixed-point arithmetic optimized for microcontrollers. Trigonometric operations are now handled through LUT-based lookups, which reduces computation time and improves motion smoothness.
+
 ---
 
 ## Features
@@ -72,8 +74,6 @@ STM32 implementation includes:
 
 - Replace current servos with higher quality units.
 
-- Upgrade microcontroller to dual-core STM32H7 for improved performance.
-
 - Add effector ( additional 2 degrees of freedom )
 
 - Implement out-of-workspace detection and recovery algorithm by searching solution space in the neighbourhood.
@@ -82,9 +82,7 @@ STM32 implementation includes:
 
 ## Known Issues
 
-- Current microcontroller may struggle with complex IK calculations for 6-DOF.
-
-- If the robot moves outside the workspace, it may not automatically recover — planned algorithm will search neighbourhood of current solution.
+- If the robot moves outside the workspace, it may not automatically recover - planned algorithm will search neighbourhood of current solution.
 
 ---
 
