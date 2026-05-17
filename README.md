@@ -1,27 +1,26 @@
 # 6-DOF Robot Project (Currently 4-DOF)
 
-This repository contains the firmware and simulation files for a 6-degree-of-freedom (DOF) robot, currently implemented with 4 active DOFs. The project includes live inverse kinematics computation on an STM32 microcontroller, allowing real-time control via UART or a joystick.
+This repository contains the firmware and simulation files for a 6 DOF robot, currently implemented with 4 DOFs. The project includes live inverse kinematics computation on an STM32 microcontroller, allowing real-time control via UART or a joystick.
 
-The latest version improves the inverse kinematics calculations by replacing the previous floating-point model with fixed-point arithmetic optimized for microcontrollers. Trigonometric operations are now handled through LUT-based lookups, which reduces computation time and improves motion smoothness.
+The latest version improves the inverse kinematics calculations by replacing the previous floating-point model with fixed-point arithmetic optimized for microcontrollers. Trigonometric operations are now handled through LUTs, which reduces computation time and improves motion smoothness.
 
 ---
 
 ## Features
 
 ### Matlab model
-The robot model was developed using Denavit-Hartenberg (DH) matrix notation in MATLAB.
+The robot model was developed using Denavit-Hartenberg matrix notation in MATLAB.
 
 ### DOF control with live inverse kinematics
-Inverse kinematics are computed on-the-fly using Nelder–Mead optimization implemented on the STM32
+Inverse kinematics are computed on microcontroller using Nelder–Mead optimization implemented on the STM32
 
 ### Joystick input
 
 ### UART commands
 
 ### Internal state machine
-The robot’s behavior is controlled by an internal state machine, which includes:
 
-- R_START: Start position (currently the same as R_ZERO).
+- R_START: Start position.
 The robot initializes in this state upon startup.
 
 - R_BASE: Move to the base position.
@@ -48,33 +47,11 @@ K: 200,200,200
 
 ---
 
-## Repository
-
-Repository Structure
-/simulations   # MATLAB files for model implementation and simulation
-/src           # STM32 firmware
-
-Simulations
-Contains MATLAB scripts used to derive the robot model and perform simulations.
-
-Firmware
-STM32 implementation includes:
-
-- Nelder-Mead method optimization
-
-- State machine logic
-
-- UART and joystick control
-
-- Display interface
-
----
-
-## To-Do / Future Work
+## Future Work
 
 - Replace current servos with higher quality units.
 
-- Add effector ( additional 2 degrees of freedom )
+- Add effector - additional 2 degrees of freedom
 
 - Implement out-of-workspace detection and recovery algorithm by searching solution space in the neighbourhood.
 
